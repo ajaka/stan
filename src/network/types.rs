@@ -72,11 +72,12 @@ pub enum ResponseType {
 
 pub enum ErrorCode {
     AuthError = 0x01,
-    MaxPayloadErr = 0x02,
-    MaxArtifactsErr = 0x03,
+    MaxPayloadError = 0x02,
+    MaxArtifactsError = 0x03,
     InvalidTopic = 0x04,
     WildcardInPublish = 0x05,
     MaxTokenLengthError = 0x06,
+    AuthTimeout = 0x07,
 }
 
 impl ErrorCode {
@@ -96,8 +97,8 @@ impl From<&AppError> for ErrorCode {
         match err {
             AppError::InvalidTopic { .. } => ErrorCode::InvalidTopic,
             AppError::WildcardInPublish { .. } => ErrorCode::WildcardInPublish,
-            AppError::MaxArtifactsError { .. } => ErrorCode::MaxArtifactsErr,
-            AppError::MaxPayloadError => ErrorCode::MaxPayloadErr,
+            AppError::MaxArtifactsError { .. } => ErrorCode::MaxArtifactsError,
+            AppError::MaxPayloadError => ErrorCode::MaxPayloadError,
         }
     }
 }

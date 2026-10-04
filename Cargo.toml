@@ -2,10 +2,10 @@
 name = "stan"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.85"
 
 [dependencies]
 anyhow = "1.0.104"
-futures = "0.3.34"
 serde = { version = "1.0.229", features = ["derive"] }
 serde_yaml = "0.9.34"
 subtle = "2.6.1"

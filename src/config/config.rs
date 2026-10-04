@@ -33,10 +33,10 @@ impl Config {
         buf.extend_from_slice(&self.max_control_line.to_be_bytes());
         buf.push(self.tls_required.into());
         buf.push(self.auth_required.into());
-        buf.extend_from_slice(&self.server_id.as_bytes());
-        buf.extend_from_slice(&self.version.as_bytes());
-        buf.extend_from_slice(&self.runtime.as_bytes());
-        buf.extend_from_slice(&self.host.as_bytes());
+        buf.extend_from_slice(self.server_id.as_bytes());
+        buf.extend_from_slice(self.version.as_bytes());
+        buf.extend_from_slice(self.runtime.as_bytes());
+        buf.extend_from_slice(self.host.as_bytes());
         buf
     }
 }

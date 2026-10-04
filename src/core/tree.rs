@@ -54,7 +54,7 @@ impl Trie {
         self.nodes[idx]
             .groups
             .entry(group)
-            .or_insert_with(Group::new)
+            .or_default()
             .add_conn(sender, sub_id, conn_id);
     }
 
@@ -115,10 +115,10 @@ impl Trie {
 
         let node = &self.nodes[node_idx];
 
-        if let Some(&rec) = node.children.get(">") {
-            if !self.nodes[rec].groups.is_empty() {
-                out.push(rec);
-            }
+        if let Some(&rec) = node.children.get(">")
+            && !self.nodes[rec].groups.is_empty()
+        {
+            out.push(rec);
         }
 
         if let Some(&star) = node.children.get("*") {
@@ -191,6 +191,12 @@ impl Trie {
                 self.free.push(i);
             }
         }
+    }
+}
+
+impl Default for Trie {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

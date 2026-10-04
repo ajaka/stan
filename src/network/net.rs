@@ -9,8 +9,10 @@ use tokio::{
 };
 
 use crate::{
-    common::shutdown::Shutdown,
-    common::utils::{Wildcards, split, validate_topic},
+    common::{
+        shutdown::Shutdown,
+        utils::{Wildcards, split, validate_topic},
+    },
     config::config::{AppConfig, Config},
     core::{
         actor::{Actor, Event},
@@ -262,20 +264,16 @@ async fn read_frame(
     reader.read_exact(&mut buf).await?;
     let cmd = buf[0];
     match cmd {
-        1 => {
-            return Ok(AppEvent::INFO);
-        }
-        2 => {
-            return Ok(AppEvent::PING);
-        }
+        1 => Ok(AppEvent::INFO),
+        2 => Ok(AppEvent::PING),
         3 => {
             let (sub_id, topic, group) =
                 read_sub_frame(reader, config.max_control_line as usize).await?;
-            return Ok(AppEvent::SUB {
+            Ok(AppEvent::SUB {
                 topic,
                 group,
                 sub_id,
-            });
+            })
         }
         4 => {
             let mut header = [0u8; 8];
@@ -309,21 +307,21 @@ async fn read_frame(
             reader.read_exact(&mut time_bytes).await?;
             let timestamp = u64::from_be_bytes(time_bytes);
 
-            return Ok(AppEvent::PUB {
+            Ok(AppEvent::PUB {
                 topic,
                 payload: t_bytes,
                 timestamp,
-            });
+            })
         }
         5 => {
             let (sub_id, topic, group) =
                 read_sub_frame(reader, config.max_control_line as usize).await?;
-            return Ok(AppEvent::UNSUB {
+            Ok(AppEvent::UNSUB {
                 topic,
                 group,
                 sub_id,
-            });
+            })
         }
-        _ => return Err(FrameError::bare(anyhow::anyhow!("invalid command: {cmd}"))),
+        _ => Err(FrameError::bare(anyhow::anyhow!("invalid command: {cmd}"))),
     }
 }

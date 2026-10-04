@@ -308,12 +308,14 @@ async fn no_new_connections_are_accepted_after_shutdown() {
     shutdown.signal();
     within(T, "serve returns", server).await.unwrap();
 
-    // The listener is gone, so connecting must fail.
+    // The listener is gone, so no connection may be established. How that
+    // failure surfaces is platform-dependent: Unix sends an RST and `connect`
+    // returns ECONNREFUSED, while Windows Firewall drops the SYN silently and
+    // the attempt hangs until it times out. Both mean nothing is listening, so
+    // only a *successful* connect is a failure.
     let result = tokio::time::timeout(Duration::from_millis(500), Client::try_connect(&addr)).await;
-    match result {
-        Ok(Ok(_)) => panic!("connect should not succeed after shutdown"),
-        Ok(Err(_)) => {}
-        Err(_) => panic!("connect hung instead of being refused"),
+    if let Ok(Ok(_)) = result {
+        panic!("connect should not succeed after shutdown");
     }
 }
 
@@ -439,6 +441,39 @@ async fn a_topic_at_the_control_line_limit_is_accepted_on_subscribe() {
     client.subscribe(&topic, "g", 1).await;
 
     // Accepted, so the connection stays usable.
+    client.ping().await;
+    let (kind, _) = within(T, "pong", client.read_response()).await;
+    assert_eq!(kind, common::PONG);
+}
+
+#[tokio::test]
+async fn a_stalled_token_frame_times_out() {
+    let (addr, _shutdown, _server) = spawn_server_with_token("s3cret").await;
+
+    let mut client = Client::connect(&addr).await;
+    // Three of the four length-prefix bytes, then nothing. The server must not
+    // wait on this forever.
+    client.write_raw(&[0x00, 0x00, 0x00]).await;
+
+    // Costs a real second: the timeout is a wall-clock constant, and paused time
+    // does not advance while a task is parked on live socket I/O.
+    let (kind, body) = within(T, "timeout", client.read_response()).await;
+    assert_eq!(kind, common::ERR);
+    assert_eq!(body[0], common::ERR_AUTH_TIMEOUT);
+    assert!(within(T, "closed", client.is_closed()).await);
+}
+
+#[tokio::test]
+async fn a_slow_but_valid_token_frame_still_authenticates() {
+    let (addr, _shutdown, _server) = spawn_server_with_token("s3cret").await;
+
+    let mut client = Client::connect(&addr).await;
+    // Split the frame and take longer than a scheduler hiccup would, but well
+    // inside the 1s budget, so a tight deadline would show up as a failure here.
+    client.write_raw(&(6u32).to_be_bytes()).await;
+    sleep(Duration::from_millis(250)).await;
+    client.write_raw(b"s3cret").await;
+
     client.ping().await;
     let (kind, _) = within(T, "pong", client.read_response()).await;
     assert_eq!(kind, common::PONG);

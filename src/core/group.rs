@@ -78,6 +78,12 @@ impl Group {
     }
 }
 
+impl Default for Group {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
