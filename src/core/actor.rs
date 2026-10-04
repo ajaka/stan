@@ -29,7 +29,7 @@ pub struct Actor {}
 
 impl Actor {
     pub async fn init(mut actor_receiver: Receiver<Event>) -> JoinHandle<()> {
-        let handle = tokio::task::spawn(async move {
+        tokio::task::spawn(async move {
             let mut tree = Trie::new();
             let mut id = 0;
 
@@ -66,7 +66,6 @@ impl Actor {
                     }
                 }
             }
-        });
-        handle
+        })
     }
 }

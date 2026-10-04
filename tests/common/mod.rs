@@ -156,11 +156,7 @@ impl Client {
                 let payload_len = u32::from_be_bytes(fixed[17..21].try_into().unwrap()) as usize;
                 let mut payload = vec![0u8; payload_len];
                 self.stream.read_exact(&mut payload).await.expect("payload");
-                fixed
-                    .to_vec()
-                    .into_iter()
-                    .chain(payload)
-                    .collect::<Vec<u8>>()
+                fixed.iter().copied().chain(payload).collect()
             }
             k if k == ResponseType::Err as u8 => {
                 // `[code]` plus, for some codes, a length-prefixed context.
@@ -257,7 +253,7 @@ fn err_carries_context(code: u8) -> bool {
         code,
         x if x == stan::network::types::ErrorCode::InvalidTopic as u8
             || x == stan::network::types::ErrorCode::WildcardInPublish as u8
-            || x == stan::network::types::ErrorCode::MaxArtifactsErr as u8
+            || x == stan::network::types::ErrorCode::MaxArtifactsError as u8
     )
 }
 
@@ -266,6 +262,7 @@ pub const ERR_MAX_PAYLOAD: u8 = 0x02;
 pub const ERR_TOKEN_TOO_LONG: u8 = 0x06;
 pub const ERR_AUTH: u8 = 0x01;
 pub const ERR_MAX_ARTIFACTS: u8 = 0x03;
+pub const ERR_AUTH_TIMEOUT: u8 = 0x07;
 
 /// A config with auth off, so tests don't need the token env var.
 pub fn test_config() -> AppConfig {

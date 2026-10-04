@@ -34,12 +34,3 @@ pub enum AppError {
     MaxArtifactsError { context: String },
     MaxPayloadError,
 }
-
-pub enum ErrorCode {
-    AuthError = 0x01,
-    MaxPayloadErr = 0x02,
-    MaxArtifactsErr = 0x03,
-    InvalidTopic = 0x04,
-    WildcardInPublish = 0x05,
-    MaxTokenLengthError = 0x06,
-}
