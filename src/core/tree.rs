@@ -115,10 +115,11 @@ impl Trie {
 
         let node = &self.nodes[node_idx];
 
-        if let Some(&rec) = node.children.get(">")
-            && !self.nodes[rec].groups.is_empty()
-        {
-            out.push(rec);
+        // A match guard rather than an `if let &&` let-chain: those need Rust
+        // 1.88, and this crate's MSRV is 1.85.
+        match node.children.get(">") {
+            Some(&rec) if !self.nodes[rec].groups.is_empty() => out.push(rec),
+            _ => {}
         }
 
         if let Some(&star) = node.children.get("*") {
