@@ -19,14 +19,14 @@ cargo test
 
 ## At a glance
 
-| | |
-|---|---|
-| Language | Rust 2024, MSRV 1.85 |
-| Source | ~1,860 lines · ~785 lines of tests |
-| Unsafe code | none, `#![forbid(unsafe_code)]` |
-| Concurrency | single-writer actor, no locks on the routing path |
-| Protocol | length-prefixed binary frames, big-endian |
-| Delivery | at-most-once, fire-and-forget |
+|              |                                                    |
+| ------------ | -------------------------------------------------- |
+| Language     | Rust 2024, MSRV 1.85                               |
+| Source       | ~1,860 lines · ~785 lines of tests                 |
+| Unsafe code  | none, `#![forbid(unsafe_code)]`                    |
+| Concurrency  | single-writer actor, no locks on the routing path  |
+| Protocol     | length-prefixed binary frames, big-endian          |
+| Delivery     | at-most-once, fire-and-forget                      |
 | Dependencies | `tokio`, `serde`, `serde_yaml`, `subtle`, `anyhow` |
 
 ## What it does
@@ -77,7 +77,7 @@ frames, oversized topics and payloads, token auth at the exact limit boundary, a
 four shutdown scenarios.
 
 CI runs `cargo fmt`, `cargo clippy -D warnings`, and build + test across Linux,
-macOS and Windows, with a dedicated MSRV job on 1.85.
+macOS and Windows, with a dedicated MSRV job on 1. 5.
 
 ## Layout
 
