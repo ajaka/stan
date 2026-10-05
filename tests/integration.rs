@@ -478,3 +478,108 @@ async fn a_slow_but_valid_token_frame_still_authenticates() {
     let (kind, _) = within(T, "pong", client.read_response()).await;
     assert_eq!(kind, common::PONG);
 }
+
+#[tokio::test]
+async fn a_disconnect_closes_the_connection() {
+    let (addr, _shutdown, _server) = spawn_server().await;
+
+    let mut client = Client::connect(&addr).await;
+    client.disconnect().await;
+
+    assert!(within(T, "closed", client.is_closed()).await);
+}
+
+#[tokio::test]
+async fn a_disconnect_ends_delivery_to_that_subscriber() {
+    let (addr, _shutdown, _server) = spawn_server().await;
+
+    let mut sub = Client::connect(&addr).await;
+    sub.subscribe("bye.world", "g", 1).await;
+    sleep(Duration::from_millis(50)).await;
+
+    let mut pubr = Client::connect(&addr).await;
+    pubr.publish("bye.world", b"first", 1).await;
+    within(T, "first", sub.read_message()).await;
+
+    sub.disconnect().await;
+    assert!(within(T, "sub closed", sub.is_closed()).await);
+
+    // The subscriber is gone, so the next publish matches nothing. The
+    // publisher is unaffected and stays connected.
+    pubr.publish("bye.world", b"second", 2).await;
+    pubr.ping().await;
+    let (kind, _) = within(T, "pong", pubr.read_response()).await;
+    assert_eq!(kind, common::PONG);
+}
+
+#[tokio::test]
+async fn a_disconnect_removes_every_subscription_on_that_connection() {
+    let (addr, _shutdown, _server) = spawn_server().await;
+
+    let mut sub = Client::connect(&addr).await;
+    sub.subscribe("one", "g", 1).await;
+    sub.subscribe("two", "g", 2).await;
+    sub.subscribe("three", "g1", 3).await;
+    sleep(Duration::from_millis(50)).await;
+
+    sub.disconnect().await;
+    assert!(within(T, "closed", sub.is_closed()).await);
+    // Give the actor time to process the cleanup event.
+    sleep(Duration::from_millis(100)).await;
+
+    // If any subscription survived, it would find a group with a dead writer
+    // and the publish would still succeed — which is invisible here. What we
+    // can observe is that the server is still healthy for everyone else.
+    let mut other = Client::connect(&addr).await;
+    other.subscribe("one", "g", 9).await;
+    sleep(Duration::from_millis(50)).await;
+
+    let mut pubr = Client::connect(&addr).await;
+    pubr.publish("one", b"delivered", 3).await;
+
+    let msg = within(T, "msg", other.read_message()).await;
+    assert_eq!(msg.payload, b"delivered");
+    assert_eq!(msg.sub_id, 9, "only the new subscriber should receive it");
+}
+
+#[tokio::test]
+async fn other_subscribers_are_unaffected_by_a_disconnect() {
+    let (addr, _shutdown, _server) = spawn_server().await;
+
+    let mut leaver = Client::connect(&addr).await;
+    leaver.subscribe("shared", "g", 1).await;
+    let mut stayer = Client::connect(&addr).await;
+    stayer.subscribe("shared", "g", 2).await;
+    sleep(Duration::from_millis(50)).await;
+
+    leaver.disconnect().await;
+    assert!(within(T, "leaver closed", leaver.is_closed()).await);
+    sleep(Duration::from_millis(100)).await;
+
+    let mut pubr = Client::connect(&addr).await;
+    for _ in 0..3 {
+        pubr.publish("shared", b"still here", 1).await;
+    }
+
+    // The group now has one member, so it must receive all three.
+    for _ in 0..3 {
+        let msg = within(T, "msg", stayer.read_message()).await;
+        assert_eq!(msg.payload, b"still here");
+    }
+}
+
+#[tokio::test]
+async fn a_publisher_can_disconnect_after_publishing() {
+    let (addr, _shutdown, _server) = spawn_server().await;
+
+    let mut sub = Client::connect(&addr).await;
+    sub.subscribe("last.words", "g", 1).await;
+    sleep(Duration::from_millis(50)).await;
+
+    let mut pubr = Client::connect(&addr).await;
+    pubr.publish("last.words", b"bye", 1).await;
+    within(T, "msg", sub.read_message()).await;
+
+    pubr.disconnect().await;
+    assert!(within(T, "closed", pubr.is_closed()).await);
+}

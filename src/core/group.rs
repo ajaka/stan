@@ -11,7 +11,6 @@ pub struct MessagePayload {
 
 pub struct Connections {
     pub sender: Sender<WriterMessage>,
-    pub id: usize,
     pub sub_id: u8,
     pub conn_id: usize,
 }
@@ -19,7 +18,6 @@ pub struct Connections {
 pub struct Group {
     connections: Vec<Connections>,
     next: usize,
-    id: usize,
 }
 
 impl Group {
@@ -27,7 +25,6 @@ impl Group {
         Self {
             connections: Vec::new(),
             next: 0,
-            id: 1,
         }
     }
 
@@ -35,11 +32,9 @@ impl Group {
         self.remove_conn(conn_id);
         let new_conn = Connections {
             sender,
-            id: self.id,
             sub_id,
             conn_id,
         };
-        self.id += 1;
         self.connections.push(new_conn);
     }
 

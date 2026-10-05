@@ -64,7 +64,6 @@ pub enum AppEvent {
 }
 
 pub enum ResponseType {
-    Ok = 0x01,
     Err = 0x02,
     MSG = 0x03,
     INFO = 0x04,
