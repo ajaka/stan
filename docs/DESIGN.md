@@ -122,8 +122,6 @@ flushed. Letting in-flight writes finish, under a deadline, is still to come.
 
 ---
 
----
-
 ## The routing trie
 
 Topics are stored in a **radix tree keyed on dot-separated tokens**, not on whole
@@ -134,7 +132,7 @@ storing `foo.bar.` twice.
                      root
                      │
                     foo   ← stored once, shared
-               ┌───────────┐
+               ┌────────────┐
               bar         other
                │
            ┌─────────┐
@@ -208,24 +206,27 @@ at-most-once, which is core NATS's own delivery guarantee.
 
 ---
 
----
-
 ## Wire protocol
 
 Every integer is **big-endian**. Every frame begins with a one-byte command.
 
 ### Client → server
 
-| Cmd | Name  | Frame                                                            |
-| --: | ----- | ---------------------------------------------------------------- |
-| `1` | INFO  | `[cmd]`                                                          |
-| `2` | PING  | `[cmd]`                                                          |
-| `3` | SUB   | `[cmd][sub_id:1][topic_len:4][group_len:4][topic][group]`        |
-| `4` | PUB   | `[cmd][topic_len:4][payload_len:4][topic][payload][timestamp:8]` |
-| `5` | UNSUB | `[cmd][sub_id:1][topic_len:4][group_len:4][topic][group]`        |
+| Cmd  | Name       | Frame                                                            |
+| ---: | ---------- | ---------------------------------------------------------------- |
+| `1`  | INFO       | `[cmd]`                                                          |
+| `2`  | PING       | `[cmd]`                                                          |
+| `3`  | SUB        | `[cmd][sub_id:1][topic_len:4][group_len:4][topic][group]`        |
+| `4`  | PUB        | `[cmd][topic_len:4][payload_len:4][topic][payload][timestamp:8]` |
+| `5`  | UNSUB      | `[cmd][sub_id:1][topic_len:4][group_len:4][topic][group]`        |
+| `6`  | DISCONNECT | `[cmd]`                                                          |
 
 `SUB` and `UNSUB` share one layout and one parser, since they are the same
 operation in opposite directions.
+
+`DISCONNECT` is a client's clean exit. The server answers with nothing, closes the
+socket, and tells the actor to drop every subscription that connection held — across
+all topics and all groups — so a departing client leaves no routing state behind.
 
 ### Server → client
 
@@ -238,15 +239,15 @@ operation in opposite directions.
 
 ### Error codes
 
-|   Code | Name                 | Context             |
-| -----: | -------------------- | ------------------- |
-| `0x01` | `AuthError`          | —                   |
-| `0x02` | `MaxPayloadError`    | —                   |
-| `0x03` | `MaxArtifactsError`  | `topic` or `group`  |
-| `0x04` | `InvalidTopic`       | the offending topic |
-| `0x05` | `WildcardInPublish`  | the offending topic |
-| `0x06` | `MaxTokenLengthError`| —                   |
-| `0x07` | `AuthTimeout`        | —                   |
+|   Code | Name                  | Context             |
+| -----: | --------------------- | ------------------- |
+| `0x01` | `AuthError`           | —                   |
+| `0x02` | `MaxPayloadError`     | —                   |
+| `0x03` | `MaxArtifactsError`   | `topic` or `group`  |
+| `0x04` | `InvalidTopic`        | the offending topic |
+| `0x05` | `WildcardInPublish`   | the offending topic |
+| `0x06` | `MaxTokenLengthError` | —                   |
+| `0x07` | `AuthTimeout`         | —                   |
 
 A client holds these codes as constants and branches on the code byte to decide
 whether a context follows:
@@ -331,17 +332,6 @@ control. Startup fails loudly if it is missing or over-length.
 ```bash
 STAN_AUTH_TOKEN=s3cret cargo run
 ```
-
-### A note on `runtime`
-
-`runtime` records the toolchain the server was built with — `1.98.0` is the version
-in use when this config was written — and is advertised to clients in the INFO frame
-alongside `version`. It is a build stamp, not a resolved dependency: it is whatever
-the local toolchain happened to be, so it will not match every clone and carries no
-guarantee about the toolchain a given binary actually needs. `rust-version = "1.85"`
-in `Cargo.toml` is the authoritative minimum, and CI enforces it on every push.
-
----
 
 ## Design decisions
 

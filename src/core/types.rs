@@ -25,6 +25,7 @@ pub enum WriterMessage {
     PING,
     INFO { i: Config },
     Err { err: AppError },
+    DISCONNECT,
 }
 
 #[derive(Debug, PartialEq)]

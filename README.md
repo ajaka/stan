@@ -9,7 +9,7 @@ A publish/subscribe server in Rust: a hand-rolled binary wire protocol, radix-tr
 topic routing that needs no locks, queue-group load balancing, constant-time token
 authentication, and coordinated graceful shutdown.
 
-**0 unsafe** · 90 tests over real loopback TCP · CI: fmt, clippy `-D warnings`,
+**0 unsafe** · 95 tests over real loopback TCP · CI: fmt, clippy `-D warnings`,
 Linux/macOS/Windows, MSRV 1.85 · MIT
 
 ```bash
@@ -19,14 +19,13 @@ cargo test
 
 ## At a glance
 
-| | |
-|---|---|
-| Language | Rust 2024, MSRV 1.85 |
-| Source | ~1,860 lines · ~785 lines of tests |
-| Unsafe code | none, `#![forbid(unsafe_code)]` |
-| Concurrency | single-writer actor, no locks on the routing path |
-| Protocol | length-prefixed binary frames, big-endian |
-| Delivery | at-most-once, fire-and-forget |
+|              |                                                    |
+| ------------ | -------------------------------------------------- |
+| Language     | Rust 2024, MSRV 1.85                               |
+| Unsafe code  | none, `#![forbid(unsafe_code)]`                    |
+| Concurrency  | single-writer actor, no locks on the routing path  |
+| Protocol     | length-prefixed binary frames, big-endian          |
+| Delivery     | at-most-once, fire-and-forget                      |
 | Dependencies | `tokio`, `serde`, `serde_yaml`, `subtle`, `anyhow` |
 
 ## What it does
@@ -42,6 +41,8 @@ cargo test
   rather than obeyed.
 - **Token auth** — constant-time comparison, length-capped before the body is read,
   and a 1-second deadline so a stalled handshake cannot hold a socket open.
+- **Clean disconnect** — a client can hang up explicitly, and the server drops every
+  subscription that connection held, across all topics and groups.
 - **Graceful shutdown** — a one-way latch closes every connection and joins every
   task before the process exits.
 
@@ -58,13 +59,12 @@ Configuration lives in `config/stan.yml`; see [Configuration](docs/DESIGN.md#con
 When `auth_required` is set, the shared token is read from the `STAN_AUTH_TOKEN`
 environment variable rather than the config file.
 
-The `runtime` field in that file is a build stamp of the local toolchain, advertised
-to clients in the INFO frame. `rust-version` in `Cargo.toml` is the authoritative
-minimum.
+The `runtime` field is a build stamp of whatever toolchain wrote the file, not a
+resolved dependency; `rust-version` in `Cargo.toml` is the authoritative minimum.
 
 ## Testing
 
-90 tests: 61 unit, 29 integration. The integration suite runs against a real
+95 tests: 61 unit, 34 integration. The integration suite runs against a real
 listener on an OS-assigned port over real loopback TCP — no mocked sockets.
 
 Its client is a second, independent implementation of the wire format, written
@@ -77,7 +77,7 @@ frames, oversized topics and payloads, token auth at the exact limit boundary, a
 four shutdown scenarios.
 
 CI runs `cargo fmt`, `cargo clippy -D warnings`, and build + test across Linux,
-macOS and Windows, with a dedicated MSRV job on 1.85.
+macOS and Windows, with a dedicated MSRV job on 1. 5.
 
 ## Layout
 

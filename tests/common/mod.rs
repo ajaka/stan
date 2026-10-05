@@ -14,6 +14,7 @@ pub const CMD_PING: u8 = 2;
 pub const CMD_SUB: u8 = 3;
 pub const CMD_PUB: u8 = 4;
 pub const CMD_UNSUB: u8 = 5;
+pub const CMD_DISCONNECT: u8 = 6;
 
 /// A test client that speaks the wire protocol over a real socket.
 ///
@@ -74,6 +75,11 @@ impl Client {
         buf.extend_from_slice(payload);
         buf.extend_from_slice(&timestamp.to_be_bytes());
         self.stream.write_all(&buf).await.expect("write pub");
+    }
+
+    /// The client-initiated goodbye: `[cmd]` only.
+    pub async fn disconnect(&mut self) {
+        self.write_raw(&[CMD_DISCONNECT]).await;
     }
 
     pub async fn ping(&mut self) {
