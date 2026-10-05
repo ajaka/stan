@@ -60,6 +60,7 @@ pub enum AppEvent {
         group: String,
         sub_id: u8,
     },
+    DISCONNECT,
 }
 
 pub enum ResponseType {

@@ -23,6 +23,9 @@ pub enum Event {
         group: String,
         conn_id: usize,
     },
+    DISCONNECT {
+        conn_id: usize,
+    },
 }
 
 pub struct Actor {}
@@ -63,6 +66,9 @@ impl Actor {
                         conn_id,
                     } => {
                         tree.remove_sub(topic, group, conn_id);
+                    }
+                    Event::DISCONNECT { conn_id } => {
+                        tree.remove_conn(conn_id);
                     }
                 }
             }

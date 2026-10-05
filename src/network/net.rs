@@ -94,6 +94,7 @@ pub async fn serve(listener: TcpListener, config: AppConfig, shutdown: Shutdown)
                         WriterMessage::Err { err } => {
                             container.extend_from_slice(&err.to_bytes());
                         }
+                        WriterMessage::DISCONNECT => break,
                     }
                     if writer.write_all(&container).await.is_err() {
                         break;
@@ -111,7 +112,7 @@ pub async fn serve(listener: TcpListener, config: AppConfig, shutdown: Shutdown)
 
                 match frame {
                     Ok(event) => {
-                        if let Err(e) = dispatch(
+                        match dispatch(
                             event,
                             &conn_sender,
                             &task_sender,
@@ -120,8 +121,19 @@ pub async fn serve(listener: TcpListener, config: AppConfig, shutdown: Shutdown)
                         )
                         .await
                         {
-                            eprintln!("conn {conn_id} dispatch failed: {e}");
-                            break;
+                            Ok(d) => match d {
+                                DispatchState::Disconnect => {
+                                    println!("Connection with Id {} disconnecting", conn_id);
+                                    break;
+                                }
+                                DispatchState::Normal => {
+                                    continue;
+                                }
+                            },
+                            Err(e) => {
+                                eprintln!("conn {conn_id} dispatch failed: {e}");
+                                break;
+                            }
                         }
                     }
                     Err(FrameError::Recoverable { err }) => {
@@ -154,13 +166,18 @@ pub async fn serve(listener: TcpListener, config: AppConfig, shutdown: Shutdown)
     Ok(())
 }
 
+enum DispatchState {
+    Normal,
+    Disconnect,
+}
+
 async fn dispatch(
     event: AppEvent,
     conn_sender: &mpsc::Sender<WriterMessage>,
     task_sender: &mpsc::Sender<Event>,
     config: &Config,
     conn_id: usize,
-) -> Result<()> {
+) -> Result<DispatchState> {
     match event {
         AppEvent::INFO => {
             conn_sender
@@ -215,8 +232,13 @@ async fn dispatch(
                 })
                 .await?;
         }
+        AppEvent::DISCONNECT => {
+            task_sender.send(Event::DISCONNECT { conn_id }).await?;
+            conn_sender.send(WriterMessage::DISCONNECT).await?;
+            return Ok(DispatchState::Disconnect);
+        }
     }
-    Ok(())
+    Ok(DispatchState::Normal)
 }
 
 async fn read_sub_frame(
@@ -322,6 +344,7 @@ async fn read_frame(
                 sub_id,
             })
         }
+        6 => Ok(AppEvent::DISCONNECT),
         _ => Err(FrameError::bare(anyhow::anyhow!("invalid command: {cmd}"))),
     }
 }
