@@ -527,19 +527,40 @@ async fn a_disconnect_removes_every_subscription_on_that_connection() {
     // Give the actor time to process the cleanup event.
     sleep(Duration::from_millis(100)).await;
 
-    // If any subscription survived, it would find a group with a dead writer
-    // and the publish would still succeed — which is invisible here. What we
-    // can observe is that the server is still healthy for everyone else.
-    let mut other = Client::connect(&addr).await;
-    other.subscribe("one", "g", 9).await;
+    // A surviving subscription would leave a dead writer in its group, and
+    // round-robin would then route some publishes to a channel nobody drains.
+    // So: add one replacement subscriber per affected topic, and require every
+    // one of them to receive every message. A leftover entry shows up as a
+    // message that goes missing.
+    let mut replacements = Vec::new();
+    for (topic, group, sub_id) in [("one", "g", 9), ("two", "g", 10), ("three", "g1", 11)] {
+        let mut client = Client::connect(&addr).await;
+        client.subscribe(topic, group, sub_id).await;
+        replacements.push((topic.to_string(), sub_id, client));
+    }
     sleep(Duration::from_millis(50)).await;
 
     let mut pubr = Client::connect(&addr).await;
-    pubr.publish("one", b"delivered", 3).await;
+    const ROUNDS: usize = 3;
+    for round in 0..ROUNDS {
+        for (topic, _, _) in &replacements {
+            pubr.publish(topic, b"delivered", round as u64).await;
+        }
+    }
 
-    let msg = within(T, "msg", other.read_message()).await;
-    assert_eq!(msg.payload, b"delivered");
-    assert_eq!(msg.sub_id, 9, "only the new subscriber should receive it");
+    for (topic, sub_id, client) in replacements.iter_mut() {
+        for round in 0..ROUNDS {
+            let msg = within(T, "msg", client.read_message()).await;
+            assert_eq!(
+                msg.payload, b"delivered",
+                "{topic} round {round} was not delivered"
+            );
+            assert_eq!(
+                msg.sub_id, *sub_id,
+                "{topic} round {round} carried the wrong sub_id"
+            );
+        }
+    }
 }
 
 #[tokio::test]

@@ -189,6 +189,12 @@ pointing at it, so nodes are never deleted. Pruned nodes are pushed onto a free
 list; new inserts pop from it first. There is a test that churns a subscription
 50 times and asserts the arena does not grow past its high-water mark.
 
+Pruning is a post-order walk, `prune_from`, that detaches a child and recycles its
+slot only once that child's own subtree has come back empty. A node is therefore
+only freed when the last group on it _and_ the last branch beneath it are both gone,
+so a shared prefix held by another subscription survives. A disconnect runs the same
+walk over whatever the departing connection was the final user of.
+
 ### Queue groups
 
 Each `(topic, group)` pair owns a `Group`, which holds its member connections and a

@@ -9,7 +9,7 @@ A publish/subscribe server in Rust: a hand-rolled binary wire protocol, radix-tr
 topic routing that needs no locks, queue-group load balancing, constant-time token
 authentication, and coordinated graceful shutdown.
 
-**0 unsafe** · 95 tests over real loopback TCP · CI: fmt, clippy `-D warnings`,
+**0 unsafe** · 99 tests over real loopback TCP · CI: fmt, clippy `-D warnings`,
 Linux/macOS/Windows, MSRV 1.85 · MIT
 
 ```bash
@@ -41,8 +41,9 @@ cargo test
   rather than obeyed.
 - **Token auth** — constant-time comparison, length-capped before the body is read,
   and a 1-second deadline so a stalled handshake cannot hold a socket open.
-- **Clean disconnect** — a client can hang up explicitly, and the server drops every
-  subscription that connection held, across all topics and groups.
+- **Clean disconnect** — a client can hang up explicitly; the server drops every
+  subscription that connection held and reclaims the trie nodes they were the last
+  users of, so a churning client set does not grow the routing tree.
 - **Graceful shutdown** — a one-way latch closes every connection and joins every
   task before the process exits.
 
@@ -64,7 +65,7 @@ resolved dependency; `rust-version` in `Cargo.toml` is the authoritative minimum
 
 ## Testing
 
-95 tests: 61 unit, 34 integration. The integration suite runs against a real
+99 tests: 65 unit, 34 integration. The integration suite runs against a real
 listener on an OS-assigned port over real loopback TCP — no mocked sockets.
 
 Its client is a second, independent implementation of the wire format, written
@@ -73,11 +74,11 @@ encoder would agree with it by construction and could only catch asymmetric bugs
 never a length field written the same wrong way on both sides.
 
 Coverage includes wildcard matching, queue-group balancing, malformed and truncated
-frames, oversized topics and payloads, token auth at the exact limit boundary, and
-four shutdown scenarios.
+frames, oversized topics and payloads, token auth at the exact limit boundary,
+disconnect cleanup and node reclamation, and four shutdown scenarios.
 
 CI runs `cargo fmt`, `cargo clippy -D warnings`, and build + test across Linux,
-macOS and Windows, with a dedicated MSRV job on 1. 5.
+macOS and Windows, with a dedicated MSRV job on 1.85.
 
 ## Layout
 
