@@ -174,24 +174,27 @@ impl Trie {
             node.groups.retain(|_, g| !g.is_empty());
         }
 
-        let mut reachable = vec![false; self.nodes.len()];
-        let mut stack = vec![0];
-        while let Some(idx) = stack.pop() {
-            if reachable[idx] {
-                continue;
-            }
-            reachable[idx] = true;
-            for &child in self.nodes[idx].children.values() {
-                stack.push(child);
+        self.prune_from(0);
+    }
+    fn prune_from(&mut self, node_idx: usize) -> bool {
+        let children: Vec<usize> = self.nodes[node_idx].children.values().copied().collect();
+
+        for child in children {
+            if self.prune_from(child) {
+                let seg = self.nodes[node_idx]
+                    .children
+                    .iter()
+                    .find(|&(_, &c)| c == child)
+                    .map(|(s, _)| s.clone());
+                if let Some(seg) = seg {
+                    self.nodes[node_idx].children.remove(&seg);
+                }
+                self.free.push(child);
+                self.nodes[child] = Node::new();
             }
         }
 
-        for i in (1..self.nodes.len()).filter(|&i| !reachable[i]) {
-            if !self.free.contains(&i) {
-                self.nodes[i] = Node::new();
-                self.free.push(i);
-            }
-        }
+        self.nodes[node_idx].is_empty()
     }
 }
 
@@ -484,6 +487,78 @@ mod tests {
         assert_eq!(trie.free.len(), 1);
         assert_eq!(trie.send_message("foo.bar".into(), payload()), 1);
         assert_eq!(trie.send_message("foo.bar.baz".into(), payload()), 0);
+    }
+
+    #[test]
+    fn disconnect_reclaims_the_nodes_its_subscriptions_held() {
+        let mut trie = Trie::new();
+        let (tx, _rx) = chan();
+
+        for i in 0..20 {
+            trie.add_sub(format!("a{i}.b.c"), "g".into(), tx.clone(), 1, 1);
+        }
+        // root + 20 x (aN, b, c)
+        assert_eq!(trie.nodes.len(), 61);
+
+        trie.remove_conn(1);
+
+        // Every node but the root is detached and back on the free list.
+        assert_eq!(trie.nodes.len(), 61, "arena keeps its slots");
+        assert_eq!(trie.free.len(), 60);
+    }
+
+    #[test]
+    fn disconnect_keeps_branches_that_other_connections_still_use() {
+        let mut trie = Trie::new();
+        let (tx_a, _rx_a) = chan();
+        let (tx_b, _rx_b) = chan();
+
+        // Both connections subscribe under a shared prefix, so pruning `a`
+        // must not take `b` with it.
+        trie.add_sub("shared.leaf.one".into(), "g".into(), tx_a, 1, 10);
+        trie.add_sub("shared.leaf.two".into(), "g".into(), tx_b, 1, 20);
+        // root + shared + leaf + one + two
+        assert_eq!(trie.nodes.len(), 5);
+
+        trie.remove_conn(10);
+
+        // root, shared, leaf, two  (the `one` branch is gone)
+        assert_eq!(trie.free.len(), 1);
+        assert_eq!(trie.send_message("shared.leaf.one".into(), payload()), 0);
+        assert_eq!(trie.send_message("shared.leaf.two".into(), payload()), 1);
+    }
+
+    #[test]
+    fn disconnect_keeps_a_sibling_group_on_the_same_node() {
+        let mut trie = Trie::new();
+        let (tx_a, _rx_a) = chan();
+        let (tx_b, _rx_b) = chan();
+
+        // Same topic, two groups. Dropping one connection empties `g1` but must
+        // leave `g2` — and the node — intact.
+        trie.add_sub("multi".into(), "g1".into(), tx_a, 1, 10);
+        trie.add_sub("multi".into(), "g2".into(), tx_b, 1, 20);
+        assert_eq!(trie.nodes.len(), 2);
+
+        trie.remove_conn(10);
+
+        assert_eq!(trie.free.len(), 0, "the node is still in use");
+        assert_eq!(trie.send_message("multi".into(), payload()), 1);
+    }
+
+    #[test]
+    fn churn_of_connect_and_disconnect_does_not_grow_the_arena() {
+        let mut trie = Trie::new();
+        let (tx, _rx) = chan();
+
+        for i in 0..50u32 {
+            let conn = i as usize + 1;
+            trie.add_sub("churn.topic".into(), "g".into(), tx.clone(), 1, conn);
+            trie.remove_conn(conn);
+        }
+
+        // root + churn + topic, and the high-water mark is not exceeded.
+        assert_eq!(trie.nodes.len(), 3);
     }
 
     #[test]
